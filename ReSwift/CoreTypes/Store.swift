@@ -17,10 +17,10 @@
 open class Store<State>: StoreType {
 
     typealias SubscriptionType = SubscriptionBox<State>
-    
+
     fileprivate var _state: State! {
         didSet {
-            Task { await notifySubscribers(oldValue) }
+            notifySubscribers(oldValue)
         }
     }
     private(set) public var state: State! {
@@ -31,9 +31,9 @@ open class Store<State>: StoreType {
         }
         get {
             os_unfair_lock_lock(mutex)
-            let s = _state
+            let copy = _state
             os_unfair_lock_unlock(mutex)
-            return s
+            return copy
         }
     }
 
@@ -42,7 +42,7 @@ open class Store<State>: StoreType {
     private var reducer: Reducer<State>
 
     var subscriptions: Set<SubscriptionType> = []
-    
+
     let reducerQueue = DispatchQueue(
         label: "ReSwift Reducer",
         qos: .userInitiated,
@@ -50,7 +50,7 @@ open class Store<State>: StoreType {
         autoreleaseFrequency: .workItem,
         target: nil
     )
-    
+
     fileprivate let mutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
     /// Indicates if new subscriptions attempt to apply `skipRepeats` 
@@ -96,8 +96,8 @@ open class Store<State>: StoreType {
         mutex.deallocate()
     }
     
-    private func notifySubscribers(_ oldValue: State) async {
-        await MainActor.run {
+    private func notifySubscribers(_ oldValue: State) {
+        DispatchQueue.main.async { [unowned self] in
             subscriptions.forEach {
                 if $0.subscriber == nil {
                     subscriptions.remove($0)
