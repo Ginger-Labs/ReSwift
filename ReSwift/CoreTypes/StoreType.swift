@@ -12,7 +12,7 @@
  Stores receive actions and use reducers combined with these actions, to calculate state changes.
  Upon every state update a store informs all of its subscribers.
  */
-public protocol StoreType: DispatchingStoreType {
+public protocol StoreType {
 
     associatedtype State
 
@@ -78,56 +78,6 @@ public protocol StoreType: DispatchingStoreType {
      */
     func unsubscribe(_ subscriber: AnyStoreSubscriber)
 
-    /**
-     Dispatches an action creator to the store. Action creators are functions that generate
-     actions. They are called by the store and receive the current state of the application
-     and a reference to the store as their input.
-
-     Based on that input the action creator can either return an action or not. Alternatively
-     the action creator can also perform an asynchronous operation and dispatch a new action
-     at the end of it.
-
-     Example of an action creator:
-
-     ```
-     func deleteNote(noteID: Int) -> ActionCreator {
-        return { state, store in
-            // only delete note if editing is enabled
-            if (state.editingEnabled == true) {
-                return NoteDataAction.DeleteNote(noteID)
-            } else {
-                return nil
-            }
-        }
-     }
-     ```
-
-     This action creator can then be dispatched as following:
-
-     ```
-     store.dispatch( noteActionCreator.deleteNote(3) )
-     ```
-     */
-    func dispatch(_ actionCreator: ActionCreator)
-
-    /**
-     Dispatches an async action creator to the store. An async action creator generates an
-     action creator asynchronously.
-     */
-    func dispatch(_ asyncActionCreator: AsyncActionCreator)
-
-    /**
-     Dispatches an async action creator to the store. An async action creator generates an
-     action creator asynchronously. Use this method if you want to wait for the state change
-     triggered by the asynchronously generated action creator.
-
-     This overloaded version of `dispatch` calls the provided `callback` as soon as the
-     asynchronously dispatched action has caused a new state calculation.
-
-     - Note: If the ActionCreator does not dispatch an action, the callback block will never
-     be called
-     */
-    func dispatch(_ asyncActionCreator: AsyncActionCreator, callback: DispatchCallback?)
 
     /**
      An optional callback that can be passed to the `dispatch` method.
@@ -137,31 +87,4 @@ public protocol StoreType: DispatchingStoreType {
      deviates slightly from the unidirectional data flow principal.
      */
     associatedtype DispatchCallback = (State) -> Void
-
-    /**
-     An ActionCreator is a function that, based on the received state argument, might or might not
-     create an action.
-
-     Example:
-
-     ```
-     func deleteNote(noteID: Int) -> ActionCreator {
-        return { state, store in
-            // only delete note if editing is enabled
-            if (state.editingEnabled == true) {
-                return NoteDataAction.DeleteNote(noteID)
-            } else {
-                return nil
-            }
-        }
-     }
-     ```
-
-     */
-    associatedtype ActionCreator = (_ state: State, _ store: StoreType) -> Action?
-
-    /// AsyncActionCreators allow the developer to wait for the completion of an async action.
-    associatedtype AsyncActionCreator =
-        (_ state: State, _ store: StoreType,
-         _ actionCreatorCallback: (ActionCreator) -> Void) -> Void
 }

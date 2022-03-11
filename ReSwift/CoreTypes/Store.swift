@@ -13,19 +13,27 @@
  reducers you can combine them by initializing a `MainReducer` with all of your reducers as an
  argument.
  */
+
 open class Store<State>: StoreType {
 
     typealias SubscriptionType = SubscriptionBox<State>
-
-    private(set) public var state: State! {
+    
+    fileprivate var _state: State! {
         didSet {
-            subscriptions.forEach {
-                if $0.subscriber == nil {
-                    subscriptions.remove($0)
-                } else {
-                    $0.newValues(oldState: oldValue, newState: state)
-                }
-            }
+            Task { await notifySubscribers(oldValue) }
+        }
+    }
+    private(set) public var state: State! {
+        set {
+            os_unfair_lock_lock(mutex)
+            _state = newValue
+            os_unfair_lock_unlock(mutex)
+        }
+        get {
+            os_unfair_lock_lock(mutex)
+            let s = _state
+            os_unfair_lock_unlock(mutex)
+            return s
         }
     }
 
@@ -34,6 +42,16 @@ open class Store<State>: StoreType {
     private var reducer: Reducer<State>
 
     var subscriptions: Set<SubscriptionType> = []
+    
+    let reducerQueue = DispatchQueue(
+        label: "ReSwift Reducer",
+        qos: .userInitiated,
+        attributes: [],
+        autoreleaseFrequency: .workItem,
+        target: nil
+    )
+    
+    fileprivate let mutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
     private var isDispatching = Synchronized<Bool>(false)
 
@@ -70,9 +88,25 @@ open class Store<State>: StoreType {
         self.middleware = middleware
 
         if let state = state {
-            self.state = state
+            self._state = state
         } else {
             dispatch(ReSwiftInit())
+        }
+    }
+    
+    deinit {
+        mutex.deallocate()
+    }
+    
+    private func notifySubscribers(_ oldValue: State) async {
+        await MainActor.run {
+            subscriptions.forEach {
+                if $0.subscriber == nil {
+                    subscriptions.remove($0)
+                } else {
+                    $0.newValues(oldState: oldValue, newState: state)
+                }
+            }
         }
     }
 
@@ -81,12 +115,12 @@ open class Store<State>: StoreType {
         return middleware
             .reversed()
             .reduce(
-                { [unowned self] action in
-                    self._defaultDispatch(action: action) },
+                { [unowned self] action, sync in
+                    self._defaultDispatch(action: action, sync: sync) },
                 { dispatchFunction, middleware in
                     // If the store get's deinitialized before the middleware is complete; drop
                     // the action without dispatching.
-                    let dispatch: (Action) -> Void = { [weak self] in self?.dispatch($0) }
+                    let dispatch: (Action, Bool?) -> Void = { [weak self] in self?.dispatch($0, sync: $1 ?? false) }
                     let getState: () -> State? = { [weak self] in self?.state }
                     return middleware(dispatch, getState)(dispatchFunction)
             })
@@ -155,7 +189,7 @@ open class Store<State>: StoreType {
     }
 
     // swiftlint:disable:next identifier_name
-    open func _defaultDispatch(action: Action) {
+    open func _defaultDispatch(action: Action, sync: Bool) {
         guard !isDispatching.value else {
             raiseFatalError(
                 "ReSwift:ConcurrentMutationError- Action has been dispatched while" +
@@ -165,53 +199,28 @@ open class Store<State>: StoreType {
             )
         }
 
-        isDispatching.value { $0 = true }
-        let newState = reducer(action, state)
-        isDispatching.value { $0 = false }
-
-        state = newState
-    }
-
-    open func dispatch(_ action: Action) {
-        dispatchFunction(action)
-    }
-
-    @available(*, deprecated, message: "Deprecated in favor of https://github.com/ReSwift/ReSwift-Thunk")
-    open func dispatch(_ actionCreatorProvider: @escaping ActionCreator) {
-        if let action = actionCreatorProvider(state, self) {
-            dispatch(action)
-        }
-    }
-
-    @available(*, deprecated, message: "Deprecated in favor of https://github.com/ReSwift/ReSwift-Thunk")
-    open func dispatch(_ asyncActionCreatorProvider: @escaping AsyncActionCreator) {
-        dispatch(asyncActionCreatorProvider, callback: nil)
-    }
-
-    @available(*, deprecated, message: "Deprecated in favor of https://github.com/ReSwift/ReSwift-Thunk")
-    open func dispatch(_ actionCreatorProvider: @escaping AsyncActionCreator,
-                       callback: DispatchCallback?) {
-        actionCreatorProvider(state, self) { actionProvider in
-            let action = actionProvider(self.state, self)
-
-            if let action = action {
-                self.dispatch(action)
-                callback?(self.state)
+        if sync {
+            reducerQueue.sync { [unowned self] in
+                self.isDispatching.value { $0 = true }
+                let newState = self.reducer(action, self.state)
+                self.isDispatching.value { $0 = false }
+                
+                self._state = newState
+            }
+        } else {
+            reducerQueue.async { [unowned self] in
+                let newState = self.reducer(action, self.state)
+                
+                self._state = newState
             }
         }
     }
 
+    open func dispatch(_ action: Action, sync: Bool = false) {
+        dispatchFunction(action, sync)
+    }
+
     public typealias DispatchCallback = (State) -> Void
-
-    @available(*, deprecated, message: "Deprecated in favor of https://github.com/ReSwift/ReSwift-Thunk")
-    public typealias ActionCreator = (_ state: State, _ store: Store) -> Action?
-
-    @available(*, deprecated, message: "Deprecated in favor of https://github.com/ReSwift/ReSwift-Thunk")
-    public typealias AsyncActionCreator = (
-        _ state: State,
-        _ store: Store,
-        _ actionCreatorCallback: @escaping ((ActionCreator) -> Void)
-    ) -> Void
 }
 
 // MARK: Skip Repeats for Equatable States

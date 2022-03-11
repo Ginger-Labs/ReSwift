@@ -93,10 +93,6 @@
 		8B5C1AB424EC33EF007A6F3C /* SynchronizedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C1AB124EC33E5007A6F3C /* SynchronizedTests.swift */; };
 		8B5C1AB524EC33F0007A6F3C /* SynchronizedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5C1AB124EC33E5007A6F3C /* SynchronizedTests.swift */; };
 		B7C9625775EAE647982F3EEE /* libPods-SwiftLintIntegration.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B5C08F1806830A13C9006A27 /* libPods-SwiftLintIntegration.a */; };
-		D47D2D561E32C3F50064769E /* DispatchingStoreType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */; };
-		D47D2D571E32C4170064769E /* DispatchingStoreType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */; };
-		D47D2D581E32C4180064769E /* DispatchingStoreType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */; };
-		D47D2D591E32C4190064769E /* DispatchingStoreType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */; };
 		D490BC43203F291800902589 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D490BC41203F27E000902589 /* PerformanceTests.swift */; };
 		D490BC44203F291900902589 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D490BC41203F27E000902589 /* PerformanceTests.swift */; };
 		D490BC45203F291A00902589 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D490BC41203F27E000902589 /* PerformanceTests.swift */; };
@@ -173,7 +169,6 @@
 		8B5C1AB124EC33E5007A6F3C /* SynchronizedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynchronizedTests.swift; sourceTree = "<group>"; };
 		8DA430622E3D093002316DB5 /* Pods-SwiftLintIntegration.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftLintIntegration.debug.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftLintIntegration/Pods-SwiftLintIntegration.debug.xcconfig"; sourceTree = "<group>"; };
 		B5C08F1806830A13C9006A27 /* libPods-SwiftLintIntegration.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SwiftLintIntegration.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DispatchingStoreType.swift; sourceTree = "<group>"; };
 		D490BC41203F27E000902589 /* PerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -333,7 +328,6 @@
 			isa = PBXGroup;
 			children = (
 				625E66B61C1FFC880027C288 /* Action.swift */,
-				D47D2D551E32C3F50064769E /* DispatchingStoreType.swift */,
 				259737FC1C2C661100869B8F /* Middleware.swift */,
 				625E66B81C1FFC880027C288 /* Reducer.swift */,
 				625E66B91C1FFC880027C288 /* State.swift */,
@@ -727,7 +721,6 @@
 				25DBCF461C30C16000D63A58 /* Middleware.swift in Sources */,
 				25DBCF471C30C16000D63A58 /* Coding.swift in Sources */,
 				8B5C1AB024EC31D4007A6F3C /* Synchronized.swift in Sources */,
-				D47D2D591E32C4190064769E /* DispatchingStoreType.swift in Sources */,
 				25DBCF481C30C16000D63A58 /* TypeHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -747,7 +740,6 @@
 				25DBCF5D1C30C19500D63A58 /* Middleware.swift in Sources */,
 				25DBCF5E1C30C19500D63A58 /* Coding.swift in Sources */,
 				8B5C1AAF24EC31D4007A6F3C /* Synchronized.swift in Sources */,
-				D47D2D581E32C4180064769E /* DispatchingStoreType.swift in Sources */,
 				25DBCF5F1C30C19500D63A58 /* TypeHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -785,7 +777,6 @@
 				25DBCF991C30C4F000D63A58 /* Middleware.swift in Sources */,
 				25DBCF9A1C30C4F000D63A58 /* Coding.swift in Sources */,
 				8B5C1AAE24EC31D4007A6F3C /* Synchronized.swift in Sources */,
-				D47D2D571E32C4170064769E /* DispatchingStoreType.swift in Sources */,
 				25DBCF9B1C30C4F000D63A58 /* TypeHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -831,7 +822,6 @@
 				625E66BE1C1FFC880027C288 /* Reducer.swift in Sources */,
 				625E66B41C1FFC830027C288 /* TypeHelper.swift in Sources */,
 				8B5C1AAD24EC31D4007A6F3C /* Synchronized.swift in Sources */,
-				D47D2D561E32C3F50064769E /* DispatchingStoreType.swift in Sources */,
 				625E66BF1C1FFC880027C288 /* State.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1210,6 +1200,8 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 14.2;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				SKIP_INSTALL = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1227,6 +1219,8 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				"IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]" = 14.2;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				SKIP_INSTALL = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
