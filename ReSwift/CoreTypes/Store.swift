@@ -53,8 +53,6 @@ open class Store<State>: StoreType {
     
     fileprivate let mutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
-    private var isDispatching = Synchronized<Bool>(false)
-
     /// Indicates if new subscriptions attempt to apply `skipRepeats` 
     /// by default.
     fileprivate let subscriptionsAutomaticallySkipRepeats: Bool
@@ -190,27 +188,14 @@ open class Store<State>: StoreType {
 
     // swiftlint:disable:next identifier_name
     open func _defaultDispatch(action: Action, sync: Bool) {
-        guard !isDispatching.value else {
-            raiseFatalError(
-                "ReSwift:ConcurrentMutationError- Action has been dispatched while" +
-                " a previous action is being processed. A reducer" +
-                " is dispatching an action, or ReSwift is used in a concurrent context" +
-                " (e.g. from multiple threads). Action: \(action)"
-            )
-        }
-
         if sync {
             reducerQueue.sync { [unowned self] in
-                self.isDispatching.value { $0 = true }
                 let newState = self.reducer(action, self.state)
-                self.isDispatching.value { $0 = false }
-                
                 self._state = newState
             }
         } else {
             reducerQueue.async { [unowned self] in
                 let newState = self.reducer(action, self.state)
-                
                 self._state = newState
             }
         }
