@@ -189,12 +189,12 @@ open class Store<State>: StoreType {
         if sync {
             reducerQueue.sync { [unowned self] in
                 let newState = self.reducer(action, self.state)
-                self._state = newState
+                self.state = newState
             }
         } else {
             reducerQueue.async { [unowned self] in
                 let newState = self.reducer(action, self.state)
-                self._state = newState
+                self.state = newState
             }
         }
     }
