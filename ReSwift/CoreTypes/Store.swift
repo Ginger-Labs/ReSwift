@@ -46,9 +46,7 @@ open class Store<State>: StoreType {
     let reducerQueue = DispatchQueue(
         label: "ReSwift Reducer",
         qos: .userInitiated,
-        attributes: [],
-        autoreleaseFrequency: .workItem,
-        target: nil
+        autoreleaseFrequency: .workItem
     )
 
     fileprivate let mutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
