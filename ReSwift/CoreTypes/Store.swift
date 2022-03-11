@@ -20,7 +20,15 @@ open class Store<State>: StoreType {
 
     fileprivate var _state: State! {
         didSet {
-            notifySubscribers(oldValue)
+            DispatchQueue.main.async { [unowned self] in
+                subscriptions.forEach {
+                    if $0.subscriber == nil {
+                        subscriptions.remove($0)
+                    } else {
+                        $0.newValues(oldState: oldValue, newState: state)
+                    }
+                }
+            }
         }
     }
     private(set) public var state: State! {
@@ -94,18 +102,6 @@ open class Store<State>: StoreType {
         mutex.deallocate()
     }
     
-    private func notifySubscribers(_ oldValue: State) {
-        DispatchQueue.main.async { [unowned self] in
-            subscriptions.forEach {
-                if $0.subscriber == nil {
-                    subscriptions.remove($0)
-                } else {
-                    $0.newValues(oldState: oldValue, newState: state)
-                }
-            }
-        }
-    }
-
     private func createDispatchFunction() -> DispatchFunction! {
         // Wrap the dispatch function with all middlewares
         return middleware
