@@ -90,6 +90,7 @@ open class Store<State>: StoreType {
         self.subscriptionsAutomaticallySkipRepeats = automaticallySkipsRepeats
         self.reducer = reducer
         self.middleware = middleware
+        self.mutex.initialize(to: .init())
 
         if let state = state {
             self._state = state
