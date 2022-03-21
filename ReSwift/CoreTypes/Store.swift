@@ -20,17 +20,20 @@ open class Store<State>: StoreType {
 
     fileprivate var _state: State! {
         didSet {
-            DispatchQueue.main.async { [unowned self] in
-                subscriptions.forEach {
+            DispatchQueue.main.async { [weak self] in
+                guard let strongSelf = self else { return }
+                guard let newState = strongSelf.state else { return }
+                strongSelf.subscriptions.forEach {
                     if $0.subscriber == nil {
-                        subscriptions.remove($0)
+                        strongSelf.subscriptions.remove($0)
                     } else {
-                        $0.newValues(oldState: oldValue, newState: state)
+                        $0.newValues(oldState: oldValue, newState: newState)
                     }
                 }
             }
         }
     }
+
     private(set) public var state: State! {
         set {
             os_unfair_lock_lock(mutex)
@@ -184,14 +187,16 @@ open class Store<State>: StoreType {
     // swiftlint:disable:next identifier_name
     open func _defaultDispatch(action: Action, sync: Bool) {
         if sync {
-            reducerQueue.sync { [unowned self] in
-                let newState = self.reducer(action, self.state)
-                self.state = newState
+            reducerQueue.sync { [weak self] in
+                guard let strongSelf = self else { return }
+                let newState = strongSelf.reducer(action, strongSelf.state)
+                strongSelf.state = newState
             }
         } else {
-            reducerQueue.async { [unowned self] in
-                let newState = self.reducer(action, self.state)
-                self.state = newState
+            reducerQueue.async { [weak self] in
+                guard let strongSelf = self else { return }
+                let newState = strongSelf.reducer(action, strongSelf.state)
+                strongSelf.state = newState
             }
         }
     }
