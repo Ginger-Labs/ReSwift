@@ -22,10 +22,10 @@ open class Store<State>: StoreType {
         didSet {
             guard let newState = _state else { return }
             DispatchQueue.main.async { [weak self] in
-                guard let strongSelf = self else { return }
-                strongSelf.subscriptions.forEach {
+                guard let self = self else { return }
+                self.subscriptions.forEach {
                     if $0.subscriber == nil {
-                        strongSelf.subscriptions.remove($0)
+                        self.subscriptions.remove($0)
                     } else {
                         $0.newValues(oldState: oldValue, newState: newState)
                     }
@@ -188,15 +188,15 @@ open class Store<State>: StoreType {
     open func _defaultDispatch(action: Action, sync: Bool) {
         if sync {
             reducerQueue.sync { [weak self] in
-                guard let strongSelf = self else { return }
-                let newState = strongSelf.reducer(action, strongSelf.state)
-                strongSelf.state = newState
+                guard let self = self else { return }
+                let newState = self.reducer(action, self.state)
+                self.state = newState
             }
         } else {
             reducerQueue.async { [weak self] in
-                guard let strongSelf = self else { return }
-                let newState = strongSelf.reducer(action, strongSelf.state)
-                strongSelf.state = newState
+                guard let self = self else { return }
+                let newState = self.reducer(action, self.state)
+                self.state = newState
             }
         }
     }
