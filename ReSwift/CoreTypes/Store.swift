@@ -20,9 +20,9 @@ open class Store<State>: StoreType {
 
     fileprivate var _state: State! {
         didSet {
+            guard let newState = _state else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let strongSelf = self else { return }
-                guard let newState = strongSelf.state else { return }
                 strongSelf.subscriptions.forEach {
                     if $0.subscriber == nil {
                         strongSelf.subscriptions.remove($0)
