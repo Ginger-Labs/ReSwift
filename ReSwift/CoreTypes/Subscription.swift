@@ -64,7 +64,7 @@ class SubscriptionBox<State>: Hashable {
         }
     }
 
-    func newValues(oldState: State, newState: State) {
+    func newValues(oldState: State?, newState: State) {
         // We pass all new values through the original subscription, which accepts
         // values of type `<State>`. If present, transformed subscriptions will
         // receive this update and transform it before passing it on to the subscriber.

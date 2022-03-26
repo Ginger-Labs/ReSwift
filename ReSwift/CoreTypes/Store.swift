@@ -18,32 +18,18 @@ open class Store<State>: StoreType {
 
     typealias SubscriptionType = SubscriptionBox<State>
 
-    fileprivate var _state: State! {
-        didSet {
-            guard let newState = _state else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.subscriptions.forEach {
-                    if $0.subscriber == nil {
-                        self.subscriptions.remove($0)
-                    } else {
-                        $0.newValues(oldState: oldValue, newState: newState)
-                    }
-                }
-            }
-        }
-    }
-
+    fileprivate var _state: State!
     private(set) public var state: State! {
         set {
-            os_unfair_lock_lock(mutex)
+            os_unfair_lock_lock(readMutex)
             _state = newValue
-            os_unfair_lock_unlock(mutex)
+            os_unfair_lock_unlock(readMutex)
+            enqueueNotifySubscribers()
         }
         get {
-            os_unfair_lock_lock(mutex)
+            os_unfair_lock_lock(readMutex)
             let copy = _state
-            os_unfair_lock_unlock(mutex)
+            os_unfair_lock_unlock(readMutex)
             return copy
         }
     }
@@ -54,13 +40,11 @@ open class Store<State>: StoreType {
 
     var subscriptions: Set<SubscriptionType> = []
 
-    let reducerQueue = DispatchQueue(
-        label: "ReSwift Reducer",
-        qos: .userInitiated,
-        autoreleaseFrequency: .workItem
-    )
+    private var previouslyNotifiedState: State?
+    private var subscriptionsNeedNotifying = false
 
-    fileprivate let mutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+    fileprivate let readMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+    fileprivate let reduceMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
     /// Indicates if new subscriptions attempt to apply `skipRepeats` 
     /// by default.
@@ -93,7 +77,8 @@ open class Store<State>: StoreType {
         self.subscriptionsAutomaticallySkipRepeats = automaticallySkipsRepeats
         self.reducer = reducer
         self.middleware = middleware
-        self.mutex.initialize(to: .init())
+        self.readMutex.initialize(to: .init())
+        self.reduceMutex.initialize(to: .init())
 
         if let state = state {
             self._state = state
@@ -101,22 +86,44 @@ open class Store<State>: StoreType {
             dispatch(ReSwiftInit())
         }
     }
-    
+
     deinit {
-        mutex.deallocate()
+        readMutex.deallocate()
+        reduceMutex.deallocate()
     }
-    
+
+    private func enqueueNotifySubscribers() {
+        subscriptionsNeedNotifying = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard self.subscriptionsNeedNotifying else { return }
+
+            let state = self.state!
+            let previous = self.previouslyNotifiedState
+            self.subscriptions.forEach {
+                if $0.subscriber == nil {
+                    self.subscriptions.remove($0)
+                } else {
+                    $0.newValues(oldState: previous, newState: state)
+                }
+            }
+
+            self.previouslyNotifiedState = state
+            self.subscriptionsNeedNotifying = false
+        }
+    }
+
     private func createDispatchFunction() -> DispatchFunction! {
         // Wrap the dispatch function with all middlewares
         return middleware
             .reversed()
             .reduce(
-                { [unowned self] action, sync in
-                    self._defaultDispatch(action: action, sync: sync) },
+                { [unowned self] action in
+                    self._defaultDispatch(action: action) },
                 { dispatchFunction, middleware in
                     // If the store get's deinitialized before the middleware is complete; drop
                     // the action without dispatching.
-                    let dispatch: (Action, Bool?) -> Void = { [weak self] in self?.dispatch($0, sync: $1 ?? false) }
+                    let dispatch: (Action) -> Void = { [weak self] in self?.dispatch($0) }
                     let getState: () -> State? = { [weak self] in self?.state }
                     return middleware(dispatch, getState)(dispatchFunction)
             })
@@ -185,24 +192,14 @@ open class Store<State>: StoreType {
     }
 
     // swiftlint:disable:next identifier_name
-    open func _defaultDispatch(action: Action, sync: Bool) {
-        if sync {
-            reducerQueue.sync { [weak self] in
-                guard let self = self else { return }
-                let newState = self.reducer(action, self.state)
-                self.state = newState
-            }
-        } else {
-            reducerQueue.async { [weak self] in
-                guard let self = self else { return }
-                let newState = self.reducer(action, self.state)
-                self.state = newState
-            }
-        }
+    open func _defaultDispatch(action: Action) {
+        os_unfair_lock_lock(reduceMutex)
+        state = reducer(action, state)
+        os_unfair_lock_unlock(reduceMutex)
     }
 
-    open func dispatch(_ action: Action, sync: Bool = false) {
-        dispatchFunction(action, sync)
+    open func dispatch(_ action: Action) {
+        dispatchFunction(action)
     }
 
     public typealias DispatchCallback = (State) -> Void

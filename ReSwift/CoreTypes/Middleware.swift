@@ -6,6 +6,6 @@
 //  Copyright © 2015 ReSwift Community. All rights reserved.
 //
 
-public typealias DispatchFunction = (Action, Bool) -> Void
+public typealias DispatchFunction = (Action) -> Void
 public typealias Middleware<State> = (@escaping DispatchFunction, @escaping () -> State?)
     -> (@escaping DispatchFunction) -> DispatchFunction
