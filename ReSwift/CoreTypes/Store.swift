@@ -23,8 +23,11 @@ open class Store<State>: StoreType {
         set {
             os_unfair_lock_lock(readMutex)
             _state = newValue
+            stateGeneration += 1
             os_unfair_lock_unlock(readMutex)
-            enqueueNotifySubscribers()
+            DispatchQueue.main.async {
+                self.mainThreadOnlyNotifySubscribers()
+            }
         }
         get {
             os_unfair_lock_lock(readMutex)
@@ -41,7 +44,8 @@ open class Store<State>: StoreType {
     var subscriptions: Set<SubscriptionType> = []
 
     private var previouslyNotifiedState: State?
-    private var subscriptionsNeedNotifying = false
+    private var stateGeneration: UInt = 0
+    private var notifiedGeneration: UInt = 0
 
     fileprivate let readMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
     fileprivate let reduceMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
@@ -92,25 +96,27 @@ open class Store<State>: StoreType {
         reduceMutex.deallocate()
     }
 
-    private func enqueueNotifySubscribers() {
-        subscriptionsNeedNotifying = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            guard self.subscriptionsNeedNotifying else { return }
+    // Should be called only from the main thread
+    private func mainThreadOnlyNotifySubscribers() {
+        os_unfair_lock_lock(readMutex)
+        let state = self._state!
+        let stateGeneration = self.stateGeneration
+        os_unfair_lock_unlock(readMutex)
 
-            let state = self.state!
-            let previous = self.previouslyNotifiedState
-            self.subscriptions.forEach {
-                if $0.subscriber == nil {
-                    self.subscriptions.remove($0)
-                } else {
-                    $0.newValues(oldState: previous, newState: state)
-                }
+        guard self.notifiedGeneration < stateGeneration else { return }
+
+        let previous = self.previouslyNotifiedState
+
+        subscriptions.forEach {
+            if $0.subscriber == nil {
+                subscriptions.remove($0)
+            } else {
+                $0.newValues(oldState: previous, newState: state)
             }
-
-            self.previouslyNotifiedState = state
-            self.subscriptionsNeedNotifying = false
         }
+
+        self.previouslyNotifiedState = state
+        self.notifiedGeneration = stateGeneration
     }
 
     private func createDispatchFunction() -> DispatchFunction! {
