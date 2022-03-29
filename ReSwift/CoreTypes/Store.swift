@@ -156,6 +156,8 @@ open class Store<State>: StoreType {
         transformedSubscription: Subscription<SelectedState>?)
         where S.StoreSubscriberStateType == SelectedState
     {
+        assert(Thread.isMainThread, "must subscribe from the main thread (this may change in the future)")
+
         let subscriptionBox = self.subscriptionBox(
             originalSubscription: originalSubscription,
             transformedSubscription: transformedSubscription,
@@ -202,6 +204,8 @@ open class Store<State>: StoreType {
     }
 
     open func unsubscribe(_ subscriber: AnyStoreSubscriber) {
+        assert(Thread.isMainThread, "must unsubscribe from the main thread (this may change in the future)")
+
         #if swift(>=5.0)
         if let index = subscriptions.firstIndex(where: { return $0.subscriber === subscriber }) {
             subscriptions.remove(at: index)
