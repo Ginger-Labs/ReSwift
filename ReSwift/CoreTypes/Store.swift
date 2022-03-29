@@ -21,18 +21,15 @@ open class Store<State>: StoreType {
     fileprivate var _state: State!
     private(set) public var state: State! {
         set {
-            os_unfair_lock_lock(readMutex)
+            os_unfair_lock_lock(stateMutex)
             _state = newValue
             stateGeneration += 1
-            os_unfair_lock_unlock(readMutex)
-            DispatchQueue.main.async {
-                self.mainThreadOnlyNotifySubscribers()
-            }
+            os_unfair_lock_unlock(stateMutex)
         }
         get {
-            os_unfair_lock_lock(readMutex)
+            os_unfair_lock_lock(stateMutex)
             let copy = _state
-            os_unfair_lock_unlock(readMutex)
+            os_unfair_lock_unlock(stateMutex)
             return copy
         }
     }
@@ -46,8 +43,9 @@ open class Store<State>: StoreType {
     private var previouslyNotifiedState: State?
     private var stateGeneration: UInt = 0
     private var notifiedGeneration: UInt = 0
+    private var notifying = false
 
-    fileprivate let readMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+    fileprivate let stateMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
     fileprivate let reduceMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
     /// Indicates if new subscriptions attempt to apply `skipRepeats` 
@@ -81,7 +79,7 @@ open class Store<State>: StoreType {
         self.subscriptionsAutomaticallySkipRepeats = automaticallySkipsRepeats
         self.reducer = reducer
         self.middleware = middleware
-        self.readMutex.initialize(to: .init())
+        self.stateMutex.initialize(to: .init())
         self.reduceMutex.initialize(to: .init())
 
         if let state = state {
@@ -92,21 +90,34 @@ open class Store<State>: StoreType {
     }
 
     deinit {
-        readMutex.deallocate()
+        stateMutex.deallocate()
         reduceMutex.deallocate()
+    }
+
+    private func notifySubscribers() {
+        if Thread.isMainThread {
+            mainThreadOnlyNotifySubscribers()
+        } else {
+            DispatchQueue.main.async {
+                self.mainThreadOnlyNotifySubscribers()
+            }
+        }
     }
 
     // Should be called only from the main thread
     private func mainThreadOnlyNotifySubscribers() {
-        os_unfair_lock_lock(readMutex)
+        os_unfair_lock_lock(stateMutex)
         let state = self._state!
         let stateGeneration = self.stateGeneration
-        os_unfair_lock_unlock(readMutex)
+        os_unfair_lock_unlock(stateMutex)
 
         guard self.notifiedGeneration < stateGeneration else { return }
 
         let previous = self.previouslyNotifiedState
+        self.previouslyNotifiedState = state
+        self.notifiedGeneration = stateGeneration
 
+        notifying = true
         subscriptions.forEach {
             if $0.subscriber == nil {
                 subscriptions.remove($0)
@@ -114,9 +125,7 @@ open class Store<State>: StoreType {
                 $0.newValues(oldState: previous, newState: state)
             }
         }
-
-        self.previouslyNotifiedState = state
-        self.notifiedGeneration = stateGeneration
+        notifying = false
     }
 
     private func createDispatchFunction() -> DispatchFunction! {
@@ -199,9 +208,15 @@ open class Store<State>: StoreType {
 
     // swiftlint:disable:next identifier_name
     open func _defaultDispatch(action: Action) {
+        #if DEBUG
+        if Thread.isMainThread && notifying {
+            print("[redux] Dispatching in response to a subscription update is an error: \(action)")
+        }
+        #endif
         os_unfair_lock_lock(reduceMutex)
         state = reducer(action, state)
         os_unfair_lock_unlock(reduceMutex)
+        notifySubscribers()
     }
 
     open func dispatch(_ action: Action) {
