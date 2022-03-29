@@ -41,8 +41,8 @@ open class Store<State>: StoreType {
     var subscriptions: Set<SubscriptionType> = []
 
     private var previouslyNotifiedState: State?
-    private var stateGeneration: UInt = 0
-    private var notifiedGeneration: UInt = 0
+    private(set) public var stateGeneration: UInt = 0
+    private(set) public var notifiedGeneration: UInt = 0
     private var notifying = false
 
     fileprivate let stateMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
