@@ -43,7 +43,10 @@ open class Store<State>: StoreType {
     private var previouslyNotifiedState: State?
     private(set) public var stateGeneration: UInt = 0
     private(set) public var notifiedGeneration: UInt = 0
+
+    #if DEBUG
     private var notifying = false
+    #endif
 
     fileprivate let stateMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
     fileprivate let reduceMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
@@ -117,7 +120,9 @@ open class Store<State>: StoreType {
         self.previouslyNotifiedState = state
         self.notifiedGeneration = stateGeneration
 
+        #if DEBUG
         notifying = true
+        #endif
         subscriptions.forEach {
             if $0.subscriber == nil {
                 subscriptions.remove($0)
@@ -125,7 +130,9 @@ open class Store<State>: StoreType {
                 $0.newValues(oldState: previous, newState: state)
             }
         }
+        #if DEBUG
         notifying = false
+        #endif
     }
 
     private func createDispatchFunction() -> DispatchFunction! {
