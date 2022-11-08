@@ -38,20 +38,21 @@ open class Store<State>: StoreType {
 
     private var reducer: Reducer<State>
 
-    var subscriptions: Set<SubscriptionType> = []
+    // key is ObjectIdentifier of the subscriber
+    var subscriptions: [ObjectIdentifier: SubscriptionType] = [:]
 
     private var previouslyNotifiedState: State?
     private(set) public var stateGeneration: UInt = 0
     private(set) public var notifiedGeneration: UInt = 0
 
-    #if DEBUG
+#if DEBUG
     private var notifying = false
-    #endif
+#endif
 
     fileprivate let stateMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
     fileprivate let reduceMutex = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
 
-    /// Indicates if new subscriptions attempt to apply `skipRepeats` 
+    /// Indicates if new subscriptions attempt to apply `skipRepeats`
     /// by default.
     fileprivate let subscriptionsAutomaticallySkipRepeats: Bool
 
@@ -66,12 +67,12 @@ open class Store<State>: StoreType {
     /// Middleware is applied in the order in which it is passed into this constructor.
     ///
     /// - parameter reducer: Main reducer that processes incoming actions.
-    /// - parameter state: Initial state, if any. Can be `nil` and will be 
+    /// - parameter state: Initial state, if any. Can be `nil` and will be
     ///   provided by the reducer in that case.
-    /// - parameter middleware: Ordered list of action pre-processors, acting 
+    /// - parameter middleware: Ordered list of action pre-processors, acting
     ///   before the root reducer.
-    /// - parameter automaticallySkipsRepeats: If `true`, the store will attempt 
-    ///   to skip idempotent state updates when a subscriber's state type 
+    /// - parameter automaticallySkipsRepeats: If `true`, the store will attempt
+    ///   to skip idempotent state updates when a subscriber's state type
     ///   implements `Equatable`. Defaults to `true`.
     public required init(
         reducer: @escaping Reducer<State>,
@@ -97,12 +98,19 @@ open class Store<State>: StoreType {
         reduceMutex.deallocate()
     }
 
+    // thread-safe
     private func notifySubscribers() {
+        onMainThread {
+            self.mainThreadOnlyNotifySubscribers()
+        }
+    }
+
+    func onMainThread(_ task: @escaping () -> Void) {
         if Thread.isMainThread {
-            mainThreadOnlyNotifySubscribers()
+            task()
         } else {
             DispatchQueue.main.async {
-                self.mainThreadOnlyNotifySubscribers()
+                task()
             }
         }
     }
@@ -120,19 +128,19 @@ open class Store<State>: StoreType {
         self.previouslyNotifiedState = state
         self.notifiedGeneration = stateGeneration
 
-        #if DEBUG
+#if DEBUG
         notifying = true
-        #endif
-        subscriptions.forEach {
+#endif
+        subscriptions.values.forEach {
             if $0.subscriber == nil {
-                subscriptions.remove($0)
+                subscriptions[$0.objectIdentifier] = nil
             } else {
                 $0.newValues(oldState: previous, newState: state)
             }
         }
-        #if DEBUG
+#if DEBUG
         notifying = false
-        #endif
+#endif
     }
 
     private func createDispatchFunction() -> DispatchFunction! {
@@ -148,32 +156,42 @@ open class Store<State>: StoreType {
                     let dispatch: (Action) -> Void = { [weak self] in self?.dispatch($0) }
                     let getState: () -> State? = { [weak self] in self?.state }
                     return middleware(dispatch, getState)(dispatchFunction)
-            })
+                })
     }
 
+    // thread-safe
     fileprivate func _subscribe<SelectedState, S: StoreSubscriber>(
         _ subscriber: S, originalSubscription: Subscription<State>,
         transformedSubscription: Subscription<SelectedState>?)
-        where S.StoreSubscriberStateType == SelectedState
+    where S.StoreSubscriberStateType == SelectedState
     {
-        assert(Thread.isMainThread, "must subscribe from the main thread (this may change in the future)")
+        onMainThread {
+            let subscriptionBox = self.subscriptionBox(
+                originalSubscription: originalSubscription,
+                transformedSubscription: transformedSubscription,
+                subscriber: subscriber
+            )
 
-        let subscriptionBox = self.subscriptionBox(
-            originalSubscription: originalSubscription,
-            transformedSubscription: transformedSubscription,
-            subscriber: subscriber
-        )
+            // Each subscriber can only have 1 subscription registered at a time.
+            // This appears to fit with how we are using redux currently, but I added an assert to check if we accidentally
+            // subscribe more than once.
 
-        subscriptions.update(with: subscriptionBox)
+            // Update this code actually does fire when SwiftUI @ReduxSwiftUIObservable is used as a property in SwiftUI
+            // it may be that the SwiftUI reuses the same pointer for an observer that replaces another
+            //            let oldSubcription = self.subscriptions[subscriptionBox.objectIdentifier]
+            //            assert(oldSubcription == nil, "new subscription: \(subscriptionBox) replaced old subcriber: \(oldSubcription). Is this supposed to happen?")
 
-        if let state = self.state {
-            originalSubscription.newValues(oldState: nil, newState: state)
+            self.subscriptions[subscriptionBox.objectIdentifier] = subscriptionBox
+
+            if let state = self.state {
+                originalSubscription.newValues(oldState: nil, newState: state)
+            }
         }
     }
 
     open func subscribe<S: StoreSubscriber>(_ subscriber: S)
-        where S.StoreSubscriberStateType == State {
-            subscribe(subscriber, transform: nil)
+    where S.StoreSubscriberStateType == State {
+        subscribe(subscriber, transform: nil)
     }
 
     open func subscribe<SelectedState, S: StoreSubscriber>(
@@ -194,7 +212,7 @@ open class Store<State>: StoreType {
         originalSubscription: Subscription<State>,
         transformedSubscription: Subscription<T>?,
         subscriber: AnyStoreSubscriber
-        ) -> SubscriptionBox<State> {
+    ) -> SubscriptionBox<State> {
 
         return SubscriptionBox(
             originalSubscription: originalSubscription,
@@ -203,27 +221,22 @@ open class Store<State>: StoreType {
         )
     }
 
+    // thread-safe
     open func unsubscribe(_ subscriber: AnyStoreSubscriber) {
-        assert(Thread.isMainThread, "must unsubscribe from the main thread (this may change in the future)")
-
-        #if swift(>=5.0)
-        if let index = subscriptions.firstIndex(where: { return $0.subscriber === subscriber }) {
-            subscriptions.remove(at: index)
+        // unsubscribe is called during `subscriber` deinit so we need to use ObjectIdentifier to identify the subscriber async.
+        let objectIdentifier = ObjectIdentifier(subscriber)
+        onMainThread {
+            self.subscriptions[objectIdentifier] = nil
         }
-        #else
-        if let index = subscriptions.index(where: { return $0.subscriber === subscriber }) {
-            subscriptions.remove(at: index)
-        }
-        #endif
     }
 
     // swiftlint:disable:next identifier_name
     open func _defaultDispatch(action: Action) {
-        #if DEBUG
+#if DEBUG
         if Thread.isMainThread && notifying {
             print("[redux] Dispatching in response to a subscription update is an error: \(action)")
         }
-        #endif
+#endif
         os_unfair_lock_lock(reduceMutex)
         state = reducer(action, state)
         os_unfair_lock_unlock(reduceMutex)
@@ -242,7 +255,7 @@ open class Store<State>: StoreType {
 extension Store {
     open func subscribe<SelectedState: Equatable, S: StoreSubscriber>(
         _ subscriber: S, transform: ((Subscription<State>) -> Subscription<SelectedState>)?
-        ) where S.StoreSubscriberStateType == SelectedState
+    ) where S.StoreSubscriberStateType == SelectedState
     {
         let originalSubscription = Subscription<State>()
 
@@ -257,11 +270,11 @@ extension Store {
 
 extension Store where State: Equatable {
     open func subscribe<S: StoreSubscriber>(_ subscriber: S)
-        where S.StoreSubscriberStateType == State {
-            guard subscriptionsAutomaticallySkipRepeats else {
-                subscribe(subscriber, transform: nil)
-                return
-            }
-            subscribe(subscriber, transform: { $0.skipRepeats() })
+    where S.StoreSubscriberStateType == State {
+        guard subscriptionsAutomaticallySkipRepeats else {
+            subscribe(subscriber, transform: nil)
+            return
+        }
+        subscribe(subscriber, transform: { $0.skipRepeats() })
     }
 }
