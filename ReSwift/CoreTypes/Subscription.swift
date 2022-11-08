@@ -14,31 +14,11 @@
 ///
 /// The box subscribes either to the original subscription, or if available to the transformed
 /// subscription and passes any values that come through this subscriptions to the subscriber.
-class SubscriptionBox<State>: Hashable {
+class SubscriptionBox<State> {
 
     private let originalSubscription: Subscription<State>
     weak var subscriber: AnyStoreSubscriber?
-    private let objectIdentifier: ObjectIdentifier
-
-    #if swift(>=5.0)
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(self.objectIdentifier)
-        }
-    #elseif swift(>=4.2)
-        #if compiler(>=5.0)
-            func hash(into hasher: inout Hasher) {
-                hasher.combine(self.objectIdentifier)
-            }
-        #else
-            var hashValue: Int {
-                return self.objectIdentifier.hashValue
-            }
-        #endif
-    #else
-        var hashValue: Int {
-            return self.objectIdentifier.hashValue
-        }
-    #endif
+    let objectIdentifier: ObjectIdentifier
 
     init<T>(
         originalSubscription: Subscription<State>,
@@ -55,8 +35,8 @@ class SubscriptionBox<State>: Hashable {
             transformedSubscription.observer = { [unowned self] _, newState in
                 self.subscriber?._newState(state: newState as Any)
             }
-        // If we haven't received a transformed subscription, we forward all values
-        // from the original subscription.
+            // If we haven't received a transformed subscription, we forward all values
+            // from the original subscription.
         } else {
             originalSubscription.observer = { [unowned self] _, newState in
                 self.subscriber?._newState(state: newState as Any)
@@ -70,10 +50,6 @@ class SubscriptionBox<State>: Hashable {
         // receive this update and transform it before passing it on to the subscriber.
         self.originalSubscription.newValues(oldState: oldState, newState: newState)
     }
-
-    static func == (left: SubscriptionBox<State>, right: SubscriptionBox<State>) -> Bool {
-        return left.objectIdentifier == right.objectIdentifier
-    }
 }
 
 /// Represents a subscription of a subscriber to the store. The subscription determines which new
@@ -84,7 +60,7 @@ public class Subscription<State> {
 
     private func _select<Substate>(
         _ selector: @escaping (State) -> Substate
-        ) -> Subscription<Substate>
+    ) -> Subscription<Substate>
     {
         return Subscription<Substate> { sink in
             self.observer = { oldState, newState in
@@ -109,7 +85,7 @@ public class Subscription<State> {
     /// - parameter selector: A closure that maps a state to a selected substate
     public func select<Substate>(
         _ selector: @escaping (State) -> Substate
-        ) -> Subscription<Substate>
+    ) -> Subscription<Substate>
     {
         return self._select(selector)
     }
@@ -118,7 +94,7 @@ public class Subscription<State> {
     /// - parameter keyPath: A key path from a state to a substate
     public func select<Substate>(
         _ keyPath: KeyPath<State, Substate>
-        ) -> Subscription<Substate>
+    ) -> Subscription<Substate>
     {
         return self._select { $0[keyPath: keyPath] }
     }
@@ -129,7 +105,7 @@ public class Subscription<State> {
     /// - parameter oldState: The store's old state, before the action is reduced.
     /// - parameter newState: The store's new state, after the action has been reduced.
     public func skipRepeats(_ isRepeat: @escaping (_ oldState: State, _ newState: State) -> Bool)
-        -> Subscription<State> {
+    -> Subscription<State> {
         return Subscription<State> { sink in
             self.observer = { oldState, newState in
                 switch (oldState, newState) {
