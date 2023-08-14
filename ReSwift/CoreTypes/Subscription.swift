@@ -19,6 +19,7 @@ class SubscriptionBox<State> {
     private let originalSubscription: Subscription<State>
     weak var subscriber: AnyStoreSubscriber?
     let objectIdentifier: ObjectIdentifier
+    internal var paused = false
 
     init<T>(
         originalSubscription: Subscription<State>,

@@ -134,13 +134,31 @@ open class Store<State>: StoreType {
         subscriptions.values.forEach {
             if $0.subscriber == nil {
                 subscriptions[$0.objectIdentifier] = nil
-            } else {
+            } else if $0.paused == false {
                 $0.newValues(oldState: previous, newState: state)
             }
         }
 #if DEBUG
         notifying = false
 #endif
+    }
+
+    public func pause(_ subscriber: AnyStoreSubscriber) {
+        let id = ObjectIdentifier(subscriber)
+        onMainThread {
+            self.subscriptions[id]?.paused = true
+        }
+    }
+
+    public func resume(_ subscriber: AnyStoreSubscriber) {
+        let id = ObjectIdentifier(subscriber)
+        onMainThread {
+            guard let sub = self.subscriptions[id] else { return }
+            sub.paused = false
+            if let state = self.state {
+                sub.newValues(oldState: nil, newState: state)
+            }
+        }
     }
 
     private func createDispatchFunction() -> DispatchFunction! {
